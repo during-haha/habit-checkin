@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>今日打卡 · 习惯养成</title>
+<meta name="description" content="一个简单的习惯打卡网页：添加想坚持的习惯，每天完成就点一下打勾，随时看到今天完成了几项。">
+<style>
+/* =====================================================
+   0. 设计变量与基础 ·「日课册」
+   ---------------------------------------------------
+   这一页按一本日课册来排：一张冷调宣纸、几道界格、一枚朱砂印。
+   墨字 #1e2a31；苍绿 #2e5f55 是还没做完的活墨；
+   朱砂 #a3342c 全页只落在三处 —— 题名旁的那枚印、
+   今天的那一栏、以及全部完成的那一刻。
+   全站楷体：楷体通常只有一种字重，层级靠字号、字距与
+   墨色深浅来分，不靠加粗。
+===================================================== */
+:root{
+  color-scheme:light;
+  /* 纸 */
+  --paper:#e4e5dd;
+  --sheet:#f4f3ec;
+  /* 墨 */
+  --ink:#1e2a31;
+  --ink-2:#46565f;
+  --ink-3:#5f6c73;
+  --rule:#c9cac1;
+  --rule-soft:#dcdcd4;
+  /* 苍绿：还没做完的活墨 */
+  --cang:#2e5f55;
+  --cang-2:#49806f;
+  --cang-wash:#e3eae4;
+  /* 朱砂：全页唯一的亮色 */
+  --zhu:#a3342c;
+  --zhu-wash:#f1e4de;
+  /* 退墨：完成之后 */
+  --hui:#737e79;
+  --hui-mark:#7d8880;
+  --radius:3px;
+  --shadow:0 30px 56px -40px rgba(30,42,49,.55),0 2px 5px -3px rgba(30,42,49,.16);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  min-height:100vh;
+  padding:clamp(16px,3.2vw,44px) clamp(12px,2.8vw,32px) clamp(24px,4vw,48px);
+  /* 楷体优先，找不到才退回宋体/衬线体，保证任何电脑上都保持「书卷气」 */
+  font-family:"LXGW WenKai","霞鹜文楷","Kaiti SC","STKaiti","KaiTi","楷体","KaiTi_GB2312","楷体_GB2312","BiauKai","DFKai-SB","TW-Kai","Songti SC","SimSun",serif;
+  color:var(--ink-2);
+  line-height:1.85;
+  letter-spacing:.03em;
+  background:
+    radial-gradient(120% 70% at 50% -12%, rgba(255,255,255,.72), rgba(255,255,255,0) 62%),
+    linear-gradient(180deg,#e9eae3 0%,var(--paper) 48%,#dee0d7 100%);
+  background-attachment:fixed;
+  -webkit-font-smoothing:antialiased;
+}
+/* 案头：纸页四周一点暗角，让纸浮起来 */
+body::before{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(135% 105% at 50% 38%, rgba(30,42,49,0) 54%, rgba(30,42,49,.11) 100%);
+}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+svg{display:block}
+[hidden]{display:none!important}
+::selection{background:var(--cang-wash)}
+:focus-visible{outline:1.5px solid var(--cang);outline-offset:3px}
+
+/* =====================================================
+   1. 纸页与界格
+===================================================== */
+.shell{position:relative;z-index:1;width:min(1060px,100%);margin:0 auto;display:grid;gap:14px}
+/* 一张纸：极淡的横界格，左边一道朱丝栏，所有内容都落在纸上 */
+.sheet{
+  position:relative;
+  padding:clamp(20px,3.2vw,40px) clamp(18px,3.2vw,44px) clamp(18px,2.6vw,30px);
+  border:1px solid rgba(255,255,255,.78);
+  border-radius:var(--radius);
+  background:
+    repeating-linear-gradient(180deg, rgba(30,42,49,.036) 0 1px, rgba(30,42,49,0) 1px 48px),
+    linear-gradient(180deg,#f7f6f0 0%,var(--sheet) 34%,#f0efe7 100%);
+  box-shadow:var(--shadow);
+}
+.sheet::before{
+  content:"";position:absolute;top:clamp(20px,3.2vw,40px);bottom:clamp(18px,2.6vw,30px);
+  left:clamp(10px,1.8vw,22px);width:1px;background:rgba(163,52,44,.24);
+}
+.grid{
+  display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);
+  gap:clamp(20px,3.4vw,44px);align-items:start;
+  margin-top:clamp(20px,3vw,32px);padding-top:clamp(20px,3vw,32px);
+  border-top:1px solid var(--rule);
+}
+.col{display:grid;gap:clamp(18px,2.4vw,28px);align-content:start;min-width:0}
+/* 右栏是小注：用一道竖界格与正文分开 */
+.col-notes{gap:clamp(28px,4.2vw,52px);border-left:1px solid var(--rule-soft);padding-left:clamp(16px,2.6vw,30px)}
+/* 每一节都是纸上的界格，不再是一张浮起来的卡片 */
+.card{position:relative;min-width:0;padding-top:clamp(15px,2.2vw,20px);border-top:1px solid var(--rule)}
+.col > .card:first-child{border-top:0;padding-top:0}
+.card-title{display:flex;align-items:baseline;gap:8px;font-size:16px;letter-spacing:.1em;color:var(--ink)}
+.card-title svg{width:16px;height:16px;flex:0 0 auto;align-self:center;color:var(--cang)}
+.card-title .count{
+  margin-left:auto;font-size:12px;letter-spacing:.1em;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;
+}
+.card-sub{margin-top:8px;font-size:12.5px;letter-spacing:.06em;color:var(--ink-3)}
+
+/* =====================================================
+   2. 帖头：竖排题名、落款、朱砂印与水墨小景
+===================================================== */
+.hero{
+  display:grid;grid-template-columns:auto minmax(0,1fr);
+  gap:clamp(16px,3vw,38px);align-items:center;
+}
+.standfirst{display:grid;grid-template-columns:auto minmax(0,1fr);gap:clamp(14px,2.2vw,26px);align-items:start}
+.hero h1{
+  writing-mode:vertical-rl;text-orientation:upright;justify-self:start;
+  font-size:clamp(22px,3.2vw,30px);font-weight:400;letter-spacing:.16em;line-height:1;
+  color:var(--ink);
+}
+.sign{display:grid;gap:2px;justify-items:start;min-width:0}
+.greet{font-size:14px;letter-spacing:.2em;color:var(--ink)}
+.sub{font-size:12.5px;letter-spacing:.16em;color:var(--ink-3)}
+.sign-row{
+  display:flex;align-items:center;gap:12px;
+  margin-top:10px;padding-top:10px;border-top:1px solid var(--rule-soft);
+}
+.date{font-size:13px;letter-spacing:.1em;color:var(--ink-2);white-space:nowrap}
+.seal{
+  width:clamp(32px,4.4vw,40px);height:auto;flex:0 0 auto;
+  transform:rotate(-4deg);animation:seal-in .5s .18s ease-out both;
+}
+.art-frame{min-width:0}
+.scene{width:100%;height:auto;max-width:100%}
+
+/* =====================================================
+   3. 今日进度：一圈墨环 + 一道进度
+===================================================== */
+.today{display:grid;grid-template-columns:auto minmax(0,1fr);gap:clamp(16px,2.6vw,26px);align-items:center}
+.ring{position:relative;flex:0 0 auto;width:clamp(88px,14vw,104px)}
+.ring svg{width:100%;height:auto;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:7;stroke-linecap:round}
+.ring .ring-bg{stroke:var(--rule-soft)}
+.ring .ring-fg{
+  stroke:url(#ringGrad);
+  stroke-dasharray:320.44;
+  stroke-dashoffset:320.44;
+  transition:stroke-dashoffset .6s cubic-bezier(.2,.8,.25,1);
+}
+.ring-mid{
+  position:absolute;top:50%;left:0;right:0;transform:translateY(-50%);
+  display:flex;align-items:baseline;justify-content:center;color:var(--ink);
+}
+.ring-mid b{font-size:clamp(18px,3vw,23px);font-weight:400;font-variant-numeric:tabular-nums;line-height:1}
+.ring-mid i{font-size:11.5px;font-style:normal;color:var(--ink-3);margin-left:1px}
+.today-info{min-width:0}
+.today-top{font-size:13.5px;color:var(--ink-3);letter-spacing:.04em}
+.today-top b{font-size:22px;font-weight:400;color:var(--ink);font-variant-numeric:tabular-nums;margin:0 4px}
+.bar{margin-top:10px;height:5px;overflow:hidden;background:var(--rule-soft)}
+.bar i{
+  display:block;height:100%;width:0;
+  background:var(--cang-2);
+  transition:width .5s cubic-bezier(.2,.8,.25,1);
+}
+.today.all-done .bar i{background:var(--cang)}
+.today-note{margin-top:9px;font-size:12.5px;letter-spacing:.05em;color:var(--ink-3)}
+.celebrate{
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  padding:11px 16px;text-align:center;
+  font-size:13.5px;font-weight:400;letter-spacing:.12em;color:var(--zhu);
+  background:var(--zhu-wash);
+  border-top:1px solid rgba(163,52,44,.28);border-bottom:1px solid rgba(163,52,44,.28);
+}
+.celebrate svg{width:18px;height:18px;flex:0 0 auto}
+.celebrate.pop{animation:stamp .5s cubic-bezier(.2,.9,.3,1.3)}
+
+/* =====================================================
+   4. 三格数字：界格分开，不用小卡片
+===================================================== */
+.mini-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.mini{padding:2px 6px;text-align:center}
+.mini + .mini{border-left:1px solid var(--rule-soft)}
+.mini .ico{display:flex;justify-content:center;margin-bottom:6px;color:var(--cang-2)}
+.mini .ico svg{width:18px;height:18px}
+.mini b{display:block;font-size:20px;font-weight:400;line-height:1.2;color:var(--ink);font-variant-numeric:tabular-nums}
+.mini span{display:block;margin-top:2px;font-size:11.5px;letter-spacing:.04em;color:var(--ink-3)}
+
+/* =====================================================
+   5. 近 7 天：一天一栏的日课记录
+===================================================== */
+.trend{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px;margin-top:14px}
+.trend-col{display:grid;gap:7px;justify-items:center}
+.trend-track{
+  width:100%;height:80px;
+  display:flex;align-items:flex-end;overflow:hidden;
+  border-bottom:1px solid var(--rule);
+}
+.trend-track i{
+  display:block;width:100%;min-height:0;background:var(--cang-2);
+  transition:height .5s cubic-bezier(.2,.8,.25,1);
+}
+.trend-track i.is-empty{background:transparent}
+.trend-col.is-today .trend-track{border-bottom-color:var(--zhu);border-bottom-width:1.5px}
+.trend-col.is-today .trend-track i{background:var(--cang)}
+.trend-day{font-size:11px;letter-spacing:.04em;color:var(--ink-3);white-space:nowrap}
+.trend-col.is-today .trend-day{color:var(--zhu)}
+
+/* =====================================================
+   6. 专注计时
+===================================================== */
+.seg{display:grid;grid-template-columns:1fr 1fr;margin-top:12px;border-bottom:1px solid var(--rule)}
+.seg button{
+  border:0;border-bottom:2px solid transparent;padding:8px 6px;
+  background:transparent;font-size:13.5px;letter-spacing:.08em;
+  color:var(--ink-3);transition:color .2s,border-color .2s;
+}
+.seg button.on{color:var(--cang);border-bottom-color:var(--cang)}
+.timer-time{
+  margin-top:18px;text-align:center;
+  font-size:clamp(32px,5.6vw,38px);font-weight:400;letter-spacing:.1em;
+  color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.1;
+}
+.timer-bar{margin-top:12px;height:4px;overflow:hidden;background:var(--rule-soft)}
+.timer-bar i{display:block;height:100%;width:0;background:var(--cang-2);transition:width .3s linear}
+.timer-actions{display:flex;gap:10px;margin-top:16px}
+.timer-actions button{
+  flex:1 1 0;min-width:0;padding:11px 12px;border-radius:var(--radius);
+  font-size:14.5px;font-weight:400;letter-spacing:.22em;
+  transition:background .2s,color .2s,border-color .2s,box-shadow .2s;
+}
+.btn-main{border:0;color:#fbfaf5;background:var(--cang)}
+.btn-main:hover{background:#26524a}
+.btn-ghost{border:1px solid var(--rule);background:transparent;color:var(--ink-2)}
+.btn-ghost:hover{border-color:var(--cang-2);color:var(--cang)}
+.timer-note{margin-top:10px;text-align:center;font-size:11.5px;letter-spacing:.05em;color:var(--ink-3)}
+
+/* =====================================================
+   7. 今日心情：选中就用笔圈一下
+===================================================== */
+.moods{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-top:14px}
+.mood{
+  display:grid;gap:6px;justify-items:center;padding:10px 2px;
+  border:0;background:transparent;transition:color .2s;
+}
+.mood .face{position:relative;display:block;color:var(--ink-3);transition:color .2s}
+.mood .face svg{width:25px;height:25px}
+.mood .face::after{
+  content:"";position:absolute;inset:-8px -10px;
+  border:1.5px solid transparent;border-radius:52% 48% 50% 50%/50% 53% 47% 50%;
+  transform:rotate(-6deg);transition:border-color .22s;
+}
+.mood:hover .face{color:var(--cang-2)}
+.mood.on .face{color:var(--cang)}
+.mood.on .face::after{border-color:var(--cang-2)}
+.mood span{font-size:11.5px;letter-spacing:.04em;color:var(--ink-3)}
+.mood.on span{color:var(--cang)}
+.mood:focus-visible{outline:1.5px solid var(--cang);outline-offset:4px}
+
+/* =====================================================
+   8. 每日一句
+===================================================== */
+.quote{margin-top:14px;padding-left:14px;border-left:2px solid rgba(163,52,44,.35)}
+.quote p{font-size:14px;line-height:1.9;letter-spacing:.06em;color:var(--ink)}
+
+/* =====================================================
+   9. 习惯清单：一行一道界格，右边一个圈点
+===================================================== */
+.list{list-style:none;margin-top:6px}
+.habit{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 4px 13px;border-bottom:1px solid var(--rule-soft);
+  cursor:pointer;transition:background .22s;
+}
+.habit:hover{background:linear-gradient(90deg,rgba(46,95,85,.055),rgba(46,95,85,0) 78%)}
+.habit.is-new{animation:row-in .32s ease-out}
+.habit .name{
+  flex:1 1 auto;min-width:0;font-size:16.5px;font-weight:400;letter-spacing:.06em;color:var(--ink);
+  word-break:break-word;transition:color .25s;
+}
+.check{
+  flex:0 0 auto;width:26px;height:26px;border-radius:50%;
+  display:grid;place-items:center;padding:0;
+  background:transparent;border:1.6px solid var(--cang-2);color:transparent;
+  transition:background .25s,border-color .25s,color .25s;
+}
+.check:hover{border-color:var(--cang);background:var(--cang-wash)}
+.check.bump svg{animation:pop .32s ease-out}
+.del{
+  flex:0 0 auto;width:24px;height:24px;border:0;
+  display:grid;place-items:center;
+  background:transparent;color:var(--rule);font-size:18px;line-height:1;
+  transition:color .2s;
+}
+.del:hover,.del:focus-visible{color:var(--zhu)}
+
+/* 完成态：整条退墨，字被划掉，圈子填实成灰 */
+.habit.done:hover{background:transparent}
+.habit.done .name{
+  color:var(--hui);text-decoration:line-through;text-decoration-thickness:1px;
+  text-decoration-color:rgba(115,126,121,.72);
+}
+.habit.done .check{background:var(--hui-mark);border-color:var(--hui-mark);color:#fbfaf5}
+.habit.done .check:hover{background:#6f7a74;border-color:#6f7a74}
+.habit.done .del{color:var(--rule-soft)}
+
+/* 空状态插画 */
+.empty{
+  margin-top:14px;padding:24px 16px 20px;text-align:center;
+  font-size:13px;letter-spacing:.06em;color:var(--ink-3);
+  border-bottom:1px solid var(--rule-soft);
+}
+.empty-art{width:106px;height:auto;margin:0 auto 12px}
+
+/* =====================================================
+   10. 添加区与提示：像在界格上补写一行
+===================================================== */
+.add{display:flex;gap:12px;margin-top:18px;flex-wrap:wrap;align-items:flex-end}
+.add input{
+  flex:1 1 180px;min-width:0;padding:9px 2px;
+  border:0;border-bottom:1px solid var(--rule);border-radius:0;background:transparent;
+  font-size:15px;letter-spacing:.04em;transition:border-color .2s;
+}
+.add input::placeholder{color:#9aa39e}
+.add input:focus{outline:none;border-bottom-color:var(--cang)}
+.add button{
+  flex:0 0 auto;padding:11px 24px;border:0;border-radius:var(--radius);
+  font-size:14.5px;font-weight:400;letter-spacing:.24em;color:#fbfaf5;
+  background:var(--cang);transition:background .2s;
+}
+.add button:hover{background:#26524a}
+.add.shake{animation:shake .42s ease-in-out}
+.hint{margin-top:10px;min-height:20px;font-size:12.5px;letter-spacing:.05em;color:var(--ink-3);transition:color .2s}
+.hint[data-type="warn"]{color:var(--zhu)}
+.hint[data-type="ok"]{color:var(--cang)}
+
+/* =====================================================
+   11. 提示条与卷尾
+===================================================== */
+.warn{
+  padding:10px 16px;font-size:12.5px;letter-spacing:.05em;
+  color:var(--zhu);background:var(--zhu-wash);
+  border-top:1px solid rgba(163,52,44,.3);border-bottom:1px solid rgba(163,52,44,.3);
+}
+.foot{
+  margin-top:clamp(20px,3vw,30px);padding-top:clamp(14px,2vw,20px);
+  border-top:1px solid var(--rule);
+  text-align:center;font-size:11.5px;letter-spacing:.1em;color:var(--ink-3);line-height:1.9;
+}
+
+/* =====================================================
+   12. 动画：全页只有一个动作 —— 落印
+===================================================== */
+@keyframes seal-in{from{opacity:0;transform:rotate(-12deg) scale(1.3)}to{opacity:1;transform:rotate(-4deg) scale(1)}}
+@keyframes pop{from{transform:scale(.7);opacity:.3}to{transform:scale(1);opacity:1}}
+@keyframes row-in{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+@keyframes stamp{0%{transform:scale(1.14);opacity:.3}60%{transform:scale(1.01);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+
+/* =====================================================
+   13. 窄屏
+===================================================== */
+@media (max-width:900px){
+  .grid{grid-template-columns:minmax(0,1fr)}
+  .col-notes{
+    border-left:0;padding-left:0;
+    border-top:1px solid var(--rule);padding-top:clamp(18px,2.4vw,26px);
+  }
+}
+@media (max-width:700px){
+  .hero{grid-template-columns:minmax(0,1fr)}
+  .art-frame{margin-top:4px;padding-top:16px;border-top:1px solid var(--rule-soft)}
+  .scene{max-width:420px}
+}
+@media (max-width:560px){
+  .sheet{padding:18px 15px 16px}
+  .sheet::before{display:none}
+  .hero{gap:14px}
+  .hero h1{font-size:21px;letter-spacing:.12em}
+  .standfirst{gap:12px}
+  .greet{font-size:13.5px}
+  .sub{font-size:12px}
+  .date{font-size:12.5px;letter-spacing:.06em}
+  .today{gap:14px}
+  .habit{padding:13px 2px 12px}
+  .habit .name{font-size:15.5px}
+  .add button{flex:1 1 100%}
+  .mini b{font-size:18px}
+  .mood .face svg{width:22px;height:22px}
+  .mood span{font-size:10.5px}
+  .quote p{font-size:13px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+<main class="shell">
+
+  <div class="warn" id="storageWarn" hidden>当前无法保存，关闭页面后记录会丢失</div>
+
+  <article class="sheet">
+
+  <!-- ============ 帖头：竖排题名、落款、朱砂印与水墨小景 ============ -->
+  <header class="hero">
+    <div class="standfirst">
+      <h1>今日打卡</h1>
+      <div class="sign">
+        <p class="greet" id="greet">你好</p>
+        <p class="sub">每天一点点，坚持看得见</p>
+        <p class="sign-row">
+          <span class="date" id="dateText">今天</span>
+          <svg class="seal" viewBox="0 0 44 44" aria-hidden="true">
+            <rect x="1" y="1" width="42" height="42" rx="2.5" fill="#a3342c"/>
+            <rect x="3.6" y="3.6" width="36.8" height="36.8" rx="1.4" fill="none" stroke="#f4f3ec" stroke-opacity=".5" stroke-width="1.1"/>
+            <g fill="none" stroke="#f4f3ec" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11.8 10.4 L7.4 16.6"/>
+              <path d="M12.2 10.4 L16.4 16.8"/>
+              <path d="M6.4 20.6 H17.6"/>
+              <path d="M7.8 25.6 H16.8 V27.8 Q16.8 31.8 11.2 32.8"/>
+              <path d="M25.4 10.6 H35.8 V33.4 H25.4 Z"/>
+              <path d="M25.4 21.8 H35.8"/>
+            </g>
+          </svg>
+        </p>
+      </div>
+    </div>
+    <div class="art-frame">
+      <svg class="scene" viewBox="0 0 640 150" aria-hidden="true">
+        <defs>
+          <linearGradient id="ink-far" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#1e2a31" stop-opacity=".38"/>
+            <stop offset=".45" stop-color="#1e2a31" stop-opacity=".18"/>
+            <stop offset="1" stop-color="#1e2a31" stop-opacity="0"/>
+          </linearGradient>
+          <linearGradient id="ink-mist" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#f4f3ec" stop-opacity="0"/>
+            <stop offset=".5" stop-color="#f4f3ec" stop-opacity=".92"/>
+            <stop offset="1" stop-color="#f4f3ec" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <!-- 远山：三个高低不同的峰，山脚退进雾里 -->
+        <path d="M-10 108 Q60 76 110 52 Q160 80 210 94 Q256 58 300 30 Q350 76 400 92 Q448 72 500 62 Q556 86 604 96 L650 106 L650 124 L-10 124 Z" fill="url(#ink-far)"/>
+        <!-- 雾带 -->
+        <rect x="-10" y="88" width="660" height="46" fill="url(#ink-mist)"/>
+        <!-- 水面两笔 -->
+        <g stroke="#1e2a31" stroke-opacity=".16" stroke-width="1.1" stroke-linecap="round">
+          <path d="M300 128 H392"/>
+          <path d="M420 134 H470"/>
+        </g>
+        <!-- 一叶小舟 -->
+        <g stroke="#1e2a31" stroke-opacity=".55" fill="none" stroke-linecap="round">
+          <path d="M352 126 C360 131 378 131 386 124" stroke-width="1.9"/>
+          <path d="M369 124 L369 116" stroke-width="1.3"/>
+          <path d="M362 116 L376 116" stroke-width="1.3"/>
+        </g>
+      </svg>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- ============ 左栏 ============ -->
+    <div class="col">
+
+      <!-- 今日进度 -->
+      <section class="card today" id="stats">
+        <div class="ring">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <defs>
+            <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#5f9483"/>
+                <stop offset="1" stop-color="#2b5a50"/>
+              </linearGradient>
+            </defs>
+            <circle class="ring-bg" cx="60" cy="60" r="51"/>
+            <circle class="ring-fg" id="ringFg" cx="60" cy="60" r="51"/>
+          </svg>
+          <div class="ring-mid"><b id="ringPct" aria-live="polite">0</b><i>%</i></div>
+        </div>
+        <div class="today-info">
+          <div class="today-top">
+            <span aria-live="polite">今天已完成 <b id="doneNum">0</b> / <span id="totalNum">0</span> 项</span>
+          </div>
+          <div class="bar"><i id="barFill"></i></div>
+          <p class="today-note" id="todayNote">先添加一个习惯，今天就开始吧</p>
+        </div>
+      </section>
+
+      <p class="celebrate" id="celebrate" hidden>
+        <svg viewBox="0 0 18 18" aria-hidden="true">
+          <rect x="1" y="1" width="16" height="16" rx="2" fill="#a3342c"/>
+          <path d="M5.4 9.4l1.9 1.9 5.1-5.4" fill="none" stroke="#f4f3ec" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>今天的习惯全部完成，太棒了！</span>
+      </p>
+
+      <!-- 习惯清单 -->
+      <section class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 6h11M9 12h11M9 18h11"/>
+            <path d="M4 6l1.4 1.4L8 4.8"/>
+            <path d="M4 12l1.4 1.4L8 10.8"/>
+            <path d="M4 18l1.4 1.4L8 16.8"/>
+          </svg>
+          <span>我的习惯</span>
+          <span class="count" id="habitCount">0 项</span>
+        </div>
+
+        <ul class="list" id="list"></ul>
+        <div class="empty" id="empty" hidden>
+          <svg class="empty-art" viewBox="0 0 108 78" aria-hidden="true">
+            <path d="M16 60 H92" stroke="#c9cac1" stroke-width="1"/>
+            <path d="M16 69 H62" stroke="#dcdcd4" stroke-width="1"/>
+            <g transform="rotate(-24 54 34)">
+              <rect x="38" y="31" width="40" height="6" rx="3" fill="#5f6c73"/>
+              <path d="M38 31 L22 34 L38 37 Z" fill="#2e5f55"/>
+            </g>
+            <circle cx="86" cy="50" r="3" fill="#a3342c" opacity=".55"/>
+          </svg>
+          <span>还没有习惯，先添加一个吧</span>
+        </div>
+
+        <form class="add" id="addForm" autocomplete="off" novalidate>
+          <input id="nameInput" type="text" placeholder="添加一个新习惯，例如：早睡早起" aria-label="习惯名称">
+          <button type="submit">添加</button>
+        </form>
+        <p class="hint" id="hint" role="status" aria-live="polite"></p>
+      </section>
+
+      <!-- 今日心情 -->
+      <section class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M8.6 14.4a4.2 4.2 0 0 0 6.8 0"/>
+            <path d="M9 9.6h.01M15 9.6h.01"/>
+          </svg>
+          <span>今日心情</span>
+          <span class="count" id="moodCount">未记录</span>
+        </div>
+        <div class="moods" id="moods"></div>
+      </section>
+
+      <!-- 每日一句 -->
+      <section class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M11 3l1.8 4.7L17.5 9.5l-4.7 1.8L11 16l-1.8-4.7L4.5 9.5l4.7-1.8z"/>
+            <path d="M18 15.5l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9z"/>
+          </svg>
+          <span>每日一句</span>
+        </div>
+        <div class="quote">
+          <p id="quoteText">把今天过好，就是对明天最好的准备。</p>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ============ 右栏 ============ -->
+    <div class="col col-notes">
+
+      <!-- 概览小卡 -->
+      <div class="mini-grid">
+        <div class="mini">
+          <div class="ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 22c3.3 0 6-2.7 6-6 0-4.4-6-13-6-13S6 11.6 6 16c0 3.3 2.7 6 6 6z"/>
+              <path d="M12 19.4c1.5 0 2.7-1.2 2.7-2.7 0-1.9-2.7-5.3-2.7-5.3s-2.7 3.4-2.7 5.3c0 1.5 1.2 2.7 2.7 2.7z" opacity=".55"/>
+            </svg>
+          </div>
+          <b id="streakNum">0</b>
+          <span>连续坚持 · 天</span>
+        </div>
+        <div class="mini">
+          <div class="ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="16" rx="3"/>
+              <path d="M3 10h18M8 3v4M16 3v4"/>
+              <path d="M9.2 15.2l1.9 1.9 3.7-3.7"/>
+            </svg>
+          </div>
+          <b id="totalAllNum">0</b>
+          <span>累计打卡 · 项次</span>
+        </div>
+        <div class="mini">
+          <div class="ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M12 7.5V12l3 2"/>
+            </svg>
+          </div>
+          <b id="focusToday">0</b>
+          <span>今日专注 · 分钟</span>
+        </div>
+      </div>
+
+      <!-- 近 7 天 -->
+      <section class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 19V11M10 19V5M16 19v-5M22 19H2"/>
+          </svg>
+          <span>最近 7 天</span>
+          <span class="count">完成率</span>
+        </div>
+        <div class="trend" id="trend"></div>
+        <p class="card-sub" id="trendNote">记录从今天开始积累</p>
+      </section>
+
+      <!-- 专注计时 -->
+      <section class="card">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="13" r="8"/>
+            <path d="M12 9.5V13l2.4 1.6M9 2h6"/>
+          </svg>
+          <span>专注计时</span>
+        </div>
+        <div class="seg">
+          <button type="button" id="segFocus" class="on" aria-pressed="true">专注 25 分</button>
+          <button type="button" id="segBreak" aria-pressed="false">休息 5 分</button>
+        </div>
+        <div class="timer-time" id="timerTime">25:00</div>
+        <div class="timer-bar"><i id="timerBar"></i></div>
+        <div class="timer-actions">
+          <button type="button" class="btn-main" id="timerStart">开始</button>
+          <button type="button" class="btn-ghost" id="timerReset">重置</button>
+        </div>
+        <p class="timer-note">专注结束后，时长会自动记进今天</p>
+      </section>
+
+    </div>
+  </div>
+
+  <p class="foot">数据只保存在这台电脑的浏览器里，不上传、不联网。</p>
+
+  </article>
+</main>
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- 配置 ---------- */
+  var STORAGE_KEY = 'habit-checkin:v1';        // 本地存储键（改名即等于换一份全新数据）
+  var DEFAULT_NAMES = ['喝水', '运动', '读书']; // 首次打开时预置的习惯
+  var MAX_HABITS = 20;                          // 最多几个习惯
+  var MAX_NAME = 20;                            // 单个名称最多几个字
+  var WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+  var FOCUS_MINUTES = 25;                       // 一轮专注多少分钟
+  var BREAK_MINUTES = 5;                        // 一轮休息多少分钟
+  var HISTORY_LIMIT = 120;                      // 最多保留多少天的历史
+  var RING_C = 320.44;                          // 进度环周长（半径 51）
+  var MOODS = [
+    { label: '低落', icon: '<circle cx="12" cy="12" r="9"/><path d="M8.9 10.3v.9M15.1 10.3v.9"/><path d="M8.8 16.4c1-1.8 5.4-1.8 6.4 0"/>' },
+    { label: '一般', icon: '<circle cx="12" cy="12" r="9"/><path d="M8.9 10.3v.9M15.1 10.3v.9"/><path d="M9 15.9h6"/>' },
+    { label: '不错', icon: '<circle cx="12" cy="12" r="9"/><path d="M8.9 10.3v.9M15.1 10.3v.9"/><path d="M8.8 14.8c1.2 1.8 5.2 1.8 6.4 0"/>' },
+    { label: '开心', icon: '<circle cx="12" cy="12" r="9"/><path d="M8.2 10.9c.9-1.1 2-1.1 2.9 0M12.9 10.9c.9-1.1 2-1.1 2.9 0"/><path d="M8 14.4c1.4 2.3 6.6 2.3 8 0"/>' },
+    { label: '超棒', icon: '<circle cx="12" cy="12" r="9"/><path d="M8.2 10.9c.9-1.1 2-1.1 2.9 0M12.9 10.9c.9-1.1 2-1.1 2.9 0"/><path d="M7.9 14.1c1.6 2.7 6.6 2.7 8.2 0z" fill="currentColor"/>' }
+  ];
+  var QUOTES = [
+    '把今天过好，就是对明天最好的准备。',
+    '不必一下子走很远，先迈出今天这一步。',
+    '慢慢来，比较快。',
+    '微小的坚持，会在时间里长成森林。',
+    '你不需要很厉害才能开始，开始了才会慢慢变厉害。',
+    '今天多做一点点，明天就轻松一点点。',
+    '真正的自律，是温柔而坚定地对待自己。',
+    '习惯是复利，今天这一笔也算数。',
+    '别小看一次打卡，那是你对自己的承诺。',
+    '山不会走过来，所以你要向它走去。'
+  ];
+
+  /* ---------- DOM ---------- */
+  var storageWarn = document.getElementById('storageWarn');
+  var greetEl = document.getElementById('greet');
+  var dateText = document.getElementById('dateText');
+  var statsEl = document.getElementById('stats');
+  var doneNum = document.getElementById('doneNum');
+  var totalNum = document.getElementById('totalNum');
+  var barFill = document.getElementById('barFill');
+  var ringFg = document.getElementById('ringFg');
+  var ringPct = document.getElementById('ringPct');
+  var todayNote = document.getElementById('todayNote');
+  var celebrate = document.getElementById('celebrate');
+  var listEl = document.getElementById('list');
+  var emptyEl = document.getElementById('empty');
+  var habitCount = document.getElementById('habitCount');
+  var formEl = document.getElementById('addForm');
+  var inputEl = document.getElementById('nameInput');
+  var hintEl = document.getElementById('hint');
+  var trendEl = document.getElementById('trend');
+  var trendNote = document.getElementById('trendNote');
+  var moodsEl = document.getElementById('moods');
+  var moodCount = document.getElementById('moodCount');
+  var streakNum = document.getElementById('streakNum');
+  var totalAllNum = document.getElementById('totalAllNum');
+  var focusTodayEl = document.getElementById('focusToday');
+  var timerTime = document.getElementById('timerTime');
+  var timerBar = document.getElementById('timerBar');
+  var timerStart = document.getElementById('timerStart');
+  var timerReset = document.getElementById('timerReset');
+  var segFocus = document.getElementById('segFocus');
+  var segBreak = document.getElementById('segBreak');
+  var quoteText = document.getElementById('quoteText');
+
+  /* ---------- 运行时状态 ---------- */
+  var storageOk = true;
+  var seq = 0;
+  var state = null;
+  var wasAllDone = false;
+  var hintTimer = null;
+  var lastTimerShown = -1;
+
+  /* ---------- 工具函数 ---------- */
+  function uid() {
+    seq += 1;
+    return 'h' + Date.now().toString(36) + seq.toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+
+  function pad2(n) { return String(n).length < 2 ? '0' + n : String(n); }
+
+  function dayKey(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  function todayKey() { return dayKey(new Date()); }
+
+  function parseKey(key) {
+    var p = String(key).split('-');
+    return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+  }
+
+  function isDayKey(v) { return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v); }
+
+  /* 最近 n 天：从旧到新，最后一个是今天 */
+  function lastDayKeys(n) {
+    var out = [];
+    var now = new Date();
+    for (var i = n - 1; i >= 0; i -= 1) {
+      out.push(dayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)));
+    }
+    return out;
+  }
+
+  function charLength(str) {
+    return Array.from(str).length;
+  }
+
+  function isDone(id) {
+    return state.doneIds.indexOf(id) !== -1;
+  }
+
+  function findRow(id) {
+    for (var i = 0; i < listEl.children.length; i += 1) {
+      if (listEl.children[i].dataset.id === id) return listEl.children[i];
+    }
+    return null;
+  }
+
+  function clampNum(v, min, max, fallback) {
+    var n = Number(v);
+    if (!isFinite(n)) return fallback;
+    return Math.min(max, Math.max(min, Math.floor(n)));
+  }
+
+  function makeDefaultState() {
+    return {
+      date: todayKey(),
+      habits: DEFAULT_NAMES.map(function (name) { return { id: uid(), name: name }; }),
+      doneIds: [],
+      history: {},
+      moods: {},
+      focus: {},
+      timer: { mode: 'focus', remaining: FOCUS_MINUTES * 60, endAt: null }
+    };
+  }
+
+  function normalize(raw) {
+    if (!raw || typeof raw !== 'object' || !Array.isArray(raw.habits)) return null;
+    var habits = [];
+    raw.habits.forEach(function (item) {
+      if (!item || typeof item.id !== 'string' || typeof item.name !== 'string') return;
+      var name = item.name.trim().slice(0, MAX_NAME);
+      if (!name || habits.length >= MAX_HABITS) return;
+      habits.push({ id: item.id, name: name });
+    });
+    var valid = habits.map(function (h) { return h.id; });
+    var doneIds = Array.isArray(raw.doneIds)
+      ? raw.doneIds.filter(function (id) { return typeof id === 'string' && valid.indexOf(id) !== -1; })
+      : [];
+    var next = {
+      date: isDayKey(raw.date) ? raw.date : todayKey(),
+      habits: habits,
+      doneIds: doneIds,
+      history: {},
+      moods: {},
+      focus: {},
+      timer: { mode: 'focus', remaining: FOCUS_MINUTES * 60, endAt: null }
+    };
+
+    if (raw.history && typeof raw.history === 'object') {
+      Object.keys(raw.history).forEach(function (k) {
+        if (!isDayKey(k)) return;
+        var rec = raw.history[k];
+        if (!rec || typeof rec !== 'object') return;
+        next.history[k] = {
+          done: clampNum(rec.done, 0, 9999, 0),
+          total: clampNum(rec.total, 0, 9999, 0)
+        };
+      });
+    }
+    if (raw.moods && typeof raw.moods === 'object') {
+      Object.keys(raw.moods).forEach(function (k) {
+        if (!isDayKey(k)) return;
+        next.moods[k] = clampNum(raw.moods[k], 0, MOODS.length - 1, 0);
+      });
+    }
+    if (raw.focus && typeof raw.focus === 'object') {
+      Object.keys(raw.focus).forEach(function (k) {
+        if (!isDayKey(k)) return;
+        next.focus[k] = clampNum(raw.focus[k], 0, 1440, 0);
+      });
+    }
+    if (raw.timer && typeof raw.timer === 'object') {
+      var mode = raw.timer.mode === 'break' ? 'break' : 'focus';
+      var dur = (mode === 'break' ? BREAK_MINUTES : FOCUS_MINUTES) * 60;
+      var rem = Number(raw.timer.remaining);
+      var endAt = Number(raw.timer.endAt);
+      next.timer.mode = mode;
+      next.timer.remaining = (isFinite(rem) && rem > 0) ? Math.min(dur, Math.round(rem)) : dur;
+      next.timer.endAt = (isFinite(endAt) && endAt > 0) ? endAt : null;
+    }
+    return next;
+  }
+
+  /* ---------- 本地存储 ---------- */
+  function loadState() {
+    var raw = null;
+    try {
+      raw = localStorage.getItem(STORAGE_KEY);
+    } catch (err) {
+      storageOk = false;
+    }
+    if (raw) {
+      try {
+        var parsed = normalize(JSON.parse(raw));
+        if (parsed) return parsed;
+      } catch (err) { /* 数据损坏时回到默认状态 */ }
+    }
+    return makeDefaultState();
+  }
+
+  /* 把今天的完成情况写进历史快照，并只保留最近 HISTORY_LIMIT 天 */
+  function syncHistory() {
+    state.history[state.date] = {
+      done: state.doneIds.length,
+      total: state.habits.length
+    };
+    var keys = Object.keys(state.history).sort();
+    while (keys.length > HISTORY_LIMIT) {
+      delete state.history[keys.shift()];
+    }
+  }
+
+  function save() {
+    if (!storageOk) return;
+    try {
+      syncHistory();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (err) {
+      storageOk = false;
+      storageWarn.hidden = false;
+    }
+  }
+
+  /* ---------- 统计 ---------- */
+  function calcStreak() {
+    var count = 0;
+    var today = todayKey();
+    var cursor = new Date();
+    if (state.doneIds.length === 0) cursor.setDate(cursor.getDate() - 1); // 今天还没打卡时从昨天开始算
+    for (var i = 0; i < 400; i += 1) {
+      var key = dayKey(cursor);
+      var done;
+      if (key === today) {
+        done = state.doneIds.length;
+      } else {
+        done = state.history[key] ? state.history[key].done : 0;
+      }
+      if (done > 0) {
+        count += 1;
+        cursor.setDate(cursor.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+    return count;
+  }
+
+  function calcTotalDone() {
+    var sum = 0;
+    Object.keys(state.history).forEach(function (k) { sum += state.history[k].done; });
+    return sum;
+  }
+
+  /* ---------- 渲染 ---------- */
+  function renderGreet() {
+    var h = new Date().getHours();
+    var text = '你好';
+    if (h < 5) text = '夜深了';
+    else if (h < 11) text = '早上好';
+    else if (h < 13) text = '中午好';
+    else if (h < 18) text = '下午好';
+    else text = '晚上好';
+    greetEl.textContent = text;
+  }
+
+  function renderDate() {
+    var d = new Date();
+    dateText.textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日 星期' + WEEKDAYS[d.getDay()];
+  }
+
+  function renderQuote() {
+    var d = new Date();
+    var start = new Date(d.getFullYear(), 0, 0);
+    var dayOfYear = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - start) / 86400000);
+    quoteText.textContent = QUOTES[dayOfYear % QUOTES.length];
+  }
+
+  function renderList(newId) {
+    listEl.textContent = '';
+    state.habits.forEach(function (habit) {
+      var done = isDone(habit.id);
+      var li = document.createElement('li');
+      li.className = 'habit' + (done ? ' done' : '') + (habit.id === newId ? ' is-new' : '');
+      li.dataset.id = habit.id;
+
+      var name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = habit.name;
+
+      var check = document.createElement('button');
+      check.type = 'button';
+      check.className = 'check';
+      check.setAttribute('aria-pressed', String(done));
+      check.setAttribute('aria-label', (done ? '取消完成 ' : '标记完成 ') + habit.name);
+      check.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">' +
+        '<path d="M4.6 12.5l4.6 4.6L19.4 6.8" fill="none" stroke="currentColor" ' +
+        'stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'del';
+      del.setAttribute('aria-label', '删除习惯 ' + habit.name);
+      del.textContent = '×';
+
+      li.appendChild(name);
+      li.appendChild(check);
+      li.appendChild(del);
+      listEl.appendChild(li);
+    });
+    emptyEl.hidden = state.habits.length > 0;
+    habitCount.textContent = state.habits.length + ' 项';
+  }
+
+  function renderStats() {
+    var total = state.habits.length;
+    var done = state.doneIds.length;
+    var ratio = total ? done / total : 0;
+
+    doneNum.textContent = String(done);
+    totalNum.textContent = String(total);
+    barFill.style.width = Math.round(ratio * 100) + '%';
+    ringPct.textContent = String(Math.round(ratio * 100));
+    ringFg.style.strokeDashoffset = String(RING_C * (1 - ratio));
+
+    if (total === 0) {
+      todayNote.textContent = '先添加一个习惯，今天就开始吧';
+    } else if (done === total) {
+      todayNote.textContent = '今天的清单已经全部点亮';
+    } else {
+      todayNote.textContent = '还差 ' + (total - done) + ' 项就全部完成了';
+    }
+
+    var allDone = total > 0 && done === total;
+    statsEl.classList.toggle('all-done', allDone);
+    celebrate.hidden = !allDone;
+    if (allDone && !wasAllDone) {
+      celebrate.classList.remove('pop');
+      void celebrate.offsetWidth;
+      celebrate.classList.add('pop');
+    }
+    wasAllDone = allDone;
+
+    streakNum.textContent = String(calcStreak());
+    totalAllNum.textContent = String(calcTotalDone());
+    focusTodayEl.textContent = String(state.focus[todayKey()] || 0);
+    renderTrend();
+  }
+
+  function renderTrend() {
+    var keys = lastDayKeys(7);
+    var today = todayKey();
+    var hasRecord = false;
+    trendEl.textContent = '';
+
+    keys.forEach(function (key) {
+      var rec = state.history[key];
+      var total = rec ? rec.total : 0;
+      var done = rec ? rec.done : 0;
+      if (total > 0) hasRecord = true;
+      var ratio = total ? done / total : 0;
+      var date = parseKey(key);
+
+      var col = document.createElement('div');
+      col.className = 'trend-col' + (key === today ? ' is-today' : '');
+      col.title = (date.getMonth() + 1) + '月' + date.getDate() + '日 星期' + WEEKDAYS[date.getDay()] +
+        '：完成 ' + done + ' / ' + total + ' 项';
+
+      var track = document.createElement('div');
+      track.className = 'trend-track';
+      var fill = document.createElement('i');
+      if (total === 0) fill.className = 'is-empty';
+      fill.style.height = Math.round(ratio * 100) + '%';
+      track.appendChild(fill);
+
+      var label = document.createElement('span');
+      label.className = 'trend-day';
+      label.textContent = key === today ? '今天' : '周' + WEEKDAYS[date.getDay()];
+
+      col.appendChild(track);
+      col.appendChild(label);
+      trendEl.appendChild(col);
+    });
+
+    trendNote.textContent = hasRecord ? '柱子越高，当天完成得越满' : '记录从今天开始积累';
+  }
+
+  function renderMoods() {
+    var picked = state.moods[todayKey()];
+    moodsEl.textContent = '';
+
+    MOODS.forEach(function (mood, index) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mood' + (picked === index ? ' on' : '');
+      btn.setAttribute('aria-pressed', String(picked === index));
+      btn.setAttribute('aria-label', '今天心情：' + mood.label);
+
+      var face = document.createElement('span');
+      face.className = 'face';
+      face.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" ' +
+        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + mood.icon + '</svg>';
+      var label = document.createElement('span');
+      label.textContent = mood.label;
+
+      btn.appendChild(face);
+      btn.appendChild(label);
+      moodsEl.appendChild(btn);
+    });
+
+    moodCount.textContent = picked === undefined ? '未记录' : MOODS[picked].label;
+  }
+
+  /* ---------- 专注计时 ---------- */
+  function timerDuration(mode) {
+    return (mode === 'break' ? BREAK_MINUTES : FOCUS_MINUTES) * 60;
+  }
+
+  function timerLeft() {
+    var t = state.timer;
+    if (t.endAt) return Math.max(0, Math.ceil((t.endAt - Date.now()) / 1000));
+    return t.remaining;
+  }
+
+  function fmtTime(sec) {
+    var s = Math.max(0, Math.round(sec));
+    return pad2(Math.floor(s / 60)) + ':' + pad2(s % 60);
+  }
+
+  function renderTimer() {
+    var t = state.timer;
+    var total = timerDuration(t.mode);
+    var left = timerLeft();
+    lastTimerShown = left;
+
+    timerTime.textContent = fmtTime(left);
+    timerBar.style.width = Math.round((1 - left / total) * 100) + '%';
+    timerStart.textContent = t.endAt ? '暂停' : (left < total ? '继续' : '开始');
+    segFocus.classList.toggle('on', t.mode === 'focus');
+    segBreak.classList.toggle('on', t.mode === 'break');
+    segFocus.setAttribute('aria-pressed', String(t.mode === 'focus'));
+    segBreak.setAttribute('aria-pressed', String(t.mode === 'break'));
+  }
+
+  function tick() {
+    if (!state.timer.endAt) return;
+    var left = timerLeft();
+    if (left !== lastTimerShown) {
+      lastTimerShown = left;
+      renderTimer();
+    }
+    if (left <= 0) finishTimer();
+  }
+
+  function chime() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      var ctx = new Ctx();
+      [660, 880, 1320].forEach(function (f, i) {
+        var at = ctx.currentTime + i * 0.18;
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        gain.gain.setValueAtTime(0.0001, at);
+        gain.gain.exponentialRampToValueAtTime(0.12, at + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.5);
+        osc.start(at);
+        osc.stop(at + 0.55);
+      });
+    } catch (err) { /* 浏览器不允许自动播放时静默跳过 */ }
+  }
+
+  function finishTimer() {
+    var mode = state.timer.mode;
+    state.timer.endAt = null;
+    state.timer.remaining = timerDuration(mode);
+    if (mode === 'focus') {
+      var key = todayKey();
+      state.focus[key] = (state.focus[key] || 0) + FOCUS_MINUTES;
+      chime();
+    }
+    save();
+    renderTimer();
+    renderStats();
+    setHint(mode === 'focus' ? '专注完成，起来活动一下吧' : '休息结束，继续加油', 'ok');
+  }
+
+  function toggleTimer() {
+    var t = state.timer;
+    if (t.endAt) {
+      t.remaining = Math.max(0, Math.ceil((t.endAt - Date.now()) / 1000));
+      t.endAt = null;
+    } else {
+      if (t.remaining <= 0) t.remaining = timerDuration(t.mode);
+      t.endAt = Date.now() + t.remaining * 1000;
+    }
+    save();
+    renderTimer();
+  }
+
+  function switchMode(mode) {
+    state.timer.mode = mode;
+    state.timer.endAt = null;
+    state.timer.remaining = timerDuration(mode);
+    save();
+    renderTimer();
+  }
+
+  function setHint(text, type) {
+    clearTimeout(hintTimer);
+    hintEl.textContent = text;
+    if (type) {
+      hintEl.dataset.type = type;
+    } else {
+      delete hintEl.dataset.type;
+    }
+    if (text) {
+      hintTimer = setTimeout(function () {
+        hintEl.textContent = '';
+        delete hintEl.dataset.type;
+      }, 2800);
+    }
+  }
+
+  function warnHint(text) {
+    setHint(text, 'warn');
+    formEl.classList.remove('shake');
+    void formEl.offsetWidth;
+    formEl.classList.add('shake');
+    setTimeout(function () { formEl.classList.remove('shake'); }, 460);
+  }
+
+  /* ---------- 交互 ---------- */
+  function toggleDone(id) {
+    var index = state.doneIds.indexOf(id);
+    var nowDone = index === -1;
+    if (nowDone) {
+      state.doneIds.push(id);
+    } else {
+      state.doneIds.splice(index, 1);
+    }
+    save();
+
+    var row = findRow(id);
+    if (row) {
+      var habit = state.habits.filter(function (h) { return h.id === id; })[0];
+      var check = row.querySelector('.check');
+      row.classList.toggle('done', nowDone);
+      check.setAttribute('aria-pressed', String(nowDone));
+      check.setAttribute('aria-label', (nowDone ? '取消完成 ' : '标记完成 ') + (habit ? habit.name : ''));
+      check.classList.remove('bump');
+      void check.offsetWidth;
+      check.classList.add('bump');
+    }
+    renderStats();
+  }
+
+  function addHabit(rawName) {
+    var name = String(rawName).trim().replace(/\s+/g, ' ');
+    if (!name) {
+      warnHint('请先输入习惯名称');
+      return;
+    }
+    if (charLength(name) > MAX_NAME) {
+      warnHint('习惯名称最多 ' + MAX_NAME + ' 个字');
+      return;
+    }
+    var duplicate = state.habits.some(function (h) { return h.name === name; });
+    if (duplicate) {
+      warnHint('这个习惯已经有了');
+      return;
+    }
+    if (state.habits.length >= MAX_HABITS) {
+      warnHint('最多只能添加 ' + MAX_HABITS + ' 个习惯');
+      return;
+    }
+
+    var habit = { id: uid(), name: name };
+    state.habits.push(habit);
+    save();
+    renderList(habit.id);
+    renderStats();
+    inputEl.value = '';
+    inputEl.focus();
+    setHint('已添加「' + name + '」', 'ok');
+  }
+
+  function removeHabit(id) {
+    var habit = state.habits.filter(function (h) { return h.id === id; })[0];
+    if (!habit) return;
+    if (!window.confirm('确定删除「' + habit.name + '」吗？它今天的打勾记录也会一起消失。')) return;
+
+    state.habits = state.habits.filter(function (h) { return h.id !== id; });
+    state.doneIds = state.doneIds.filter(function (done) { return done !== id; });
+    save();
+    renderList();
+    renderStats();
+    inputEl.focus();
+    setHint('已删除「' + habit.name + '」', 'ok');
+  }
+
+  function setMood(index) {
+    var key = todayKey();
+    if (state.moods[key] === index) {
+      delete state.moods[key];
+      setHint('已取消今天的心情记录', 'ok');
+    } else {
+      state.moods[key] = index;
+      setHint('今天的心情：' + MOODS[index].label, 'ok');
+    }
+    save();
+    renderMoods();
+  }
+
+  function checkDay() {
+    var today = todayKey();
+    if (state.date === today) {
+      renderDate();
+      renderGreet();
+      renderQuote();
+      return;
+    }
+    state.date = today;
+    state.doneIds = [];
+    save();
+    renderDate();
+    renderGreet();
+    renderQuote();
+    renderList();
+    renderMoods();
+    renderStats();
+    setHint('新的一天开始啦，打卡记录已重置', 'ok');
+  }
+
+  /* ---------- 事件绑定 ---------- */
+  listEl.addEventListener('click', function (event) {
+    var row = event.target.closest ? event.target.closest('.habit') : null;
+    if (!row) return;
+    if (event.target.closest('.del')) {
+      removeHabit(row.dataset.id);
+      return;
+    }
+    toggleDone(row.dataset.id);
+  });
+
+  formEl.addEventListener('submit', function (event) {
+    event.preventDefault();
+    addHabit(inputEl.value);
+  });
+
+  moodsEl.addEventListener('click', function (event) {
+    var btn = event.target.closest ? event.target.closest('.mood') : null;
+    if (!btn) return;
+    setMood(Array.prototype.slice.call(moodsEl.children).indexOf(btn));
+  });
+
+  timerStart.addEventListener('click', toggleTimer);
+  timerReset.addEventListener('click', function () { switchMode(state.timer.mode); });
+  segFocus.addEventListener('click', function () { switchMode('focus'); });
+  segBreak.addEventListener('click', function () { switchMode('break'); });
+
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) checkDay();
+  });
+  window.addEventListener('focus', checkDay);
+
+  /* ---------- 启动 ---------- */
+  state = loadState();
+  if (state.date !== todayKey()) {
+    state.date = todayKey();
+    state.doneIds = [];
+  }
+
+  /* 上次关页面时计时器还在跑，这里接着算 */
+  if (state.timer.endAt) {
+    var leftSec = Math.ceil((state.timer.endAt - Date.now()) / 1000);
+    if (leftSec <= 0) {
+      if (state.timer.mode === 'focus' && dayKey(new Date(state.timer.endAt)) === todayKey()) {
+        state.focus[todayKey()] = (state.focus[todayKey()] || 0) + FOCUS_MINUTES;
+      }
+      state.timer.endAt = null;
+      state.timer.remaining = timerDuration(state.timer.mode);
+    }
+  }
+
+  storageWarn.hidden = storageOk;
+  save();
+  renderGreet();
+  renderDate();
+  renderQuote();
+  renderList();
+  renderMoods();
+  renderTimer();
+  renderStats();
+  setInterval(tick, 250);
+})();
+</script>
+</body>
+</html>
